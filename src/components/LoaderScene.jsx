@@ -13,49 +13,37 @@ const O_X = -0.879
 const O_Y =  0.745
 const O_Z =  0.338
 
-const CAM = { x: 0, y: 0.8, z: 7, tx: 0, ty: 0.5, tz: 0, fov: 44 }
+// GSAP camera proxy — written by the GSAP timeline, read every frame by useFrame
+const CAM = { x: 0.5, y: 0.6, z: 4.2, tx: 0, ty: 0.7, tz: 0, fov: 62 }
 
-// ─── BRONCO text ─────────────────────────────────────────────────
-function BroncoText({ phase }) {
-  const { scene }   = useGLTF('/BRONCO.glb')
-  const groupRef    = useRef()
-  const clock       = useRef(0)
-  const frozen      = useRef(false)
+// ─── BRONCO text ──────────────────────────────────────────────────────────
+// Text is STATIC — the camera does all the drama.
+// A barely-visible scale breathe (±0.6%) keeps it feeling alive without
+// ever moving the O out of its known world position.
+function BroncoText() {
+  const { scene }  = useGLTF('/BRONCO.glb')
+  const groupRef   = useRef()
+  const clock      = useRef(0)
 
-  // Apply material once
+  // Apply chrome material once
   useEffect(() => {
     const mat = new THREE.MeshStandardMaterial({
       color:           '#c8c8c8',
-      metalness:       0.9,
-      roughness:       0.12,
-      envMapIntensity: 1.5,
+      metalness:       0.92,
+      roughness:       0.10,
+      envMapIntensity: 1.8,
     })
     scene.traverse(obj => {
       if (obj.isMesh) { obj.material = mat; obj.castShadow = true }
     })
   }, [scene])
 
-  // When fly phase starts — snap text to neutral so O aligns correctly
-  useEffect(() => {
-    if (phase !== 'fly' || !groupRef.current) return
-    frozen.current = true
-    gsap.to(groupRef.current.rotation, { y: 0, x: 0, duration: 0.5, ease: 'power3.out' })
-    gsap.to(groupRef.current.position, { y: 0, z: 0, duration: 0.5, ease: 'power3.out' })
-  }, [phase])
-
+  // Subtle scale breathe — no rotation or translation so O stays put
   useFrame((_, delta) => {
-    if (!groupRef.current || frozen.current) return
+    if (!groupRef.current) return
     clock.current += delta
-    const T = clock.current
-
-    // Dramatic showroom motion:
-    // — wide Y rock  ±32°
-    // — vertical float
-    // — slight Z depth pulse (breathes toward / away from camera)
-    groupRef.current.rotation.y = Math.sin(T * 0.38) * 0.56
-    groupRef.current.rotation.x = Math.sin(T * 0.22) * 0.06
-    groupRef.current.position.y = Math.sin(T * 0.52) * 0.15
-    groupRef.current.position.z = Math.sin(T * 0.28) * 0.4
+    const s = 0.15 + Math.sin(clock.current * 0.45) * 0.0009
+    groupRef.current.scale.setScalar(s)
   })
 
   return (
@@ -65,112 +53,114 @@ function BroncoText({ phase }) {
   )
 }
 
-// ─── Balanced studio lighting ─────────────────────────────────────
-// Environment handles reflections for the metal.
-// Manual lights add drama and brand colour without bleaching.
+// ─── Studio lighting ──────────────────────────────────────────────────────
 function LoaderLights() {
   return (
     <>
-      {/* Low ambient — just enough so deep shadows aren't pure black */}
-      <ambientLight color="#ffffff" intensity={0.35} />
+      {/* Low ambient — keeps shadows from going pure black */}
+      <ambientLight color="#ffffff" intensity={0.30} />
 
-      {/* Key — slightly warm white, upper-front-right */}
-      <directionalLight color="#fff4e6" intensity={3.5} position={[3, 4, 5]} />
+      {/* Key — warm white, upper-front-right */}
+      <directionalLight color="#fff4e6" intensity={3.8} position={[3, 4, 5]} />
 
-      {/* Soft fill — cool left side */}
-      <directionalLight color="#c0d4ff" intensity={1.5} position={[-5, 2, 3]} />
+      {/* Fill — cool, left side */}
+      <directionalLight color="#c0d4ff" intensity={1.4} position={[-5, 2, 3]} />
 
-      {/* Rim — blue-white from back, separates chrome from bg */}
-      <directionalLight color="#80a8ff" intensity={2.5} position={[-2, 1, -5]} />
+      {/* Rim — blue-white from behind, lifts chrome off the dark bg */}
+      <directionalLight color="#80a8ff" intensity={2.8} position={[-2, 1, -5]} />
 
       {/* Orange ground bounce — Ford brand warmth */}
-      <pointLight color="#C8510A" intensity={3} position={[0, -2.5, 2.5]} distance={12} />
+      <pointLight color="#C8510A" intensity={3.2} position={[0, -2.5, 2.5]} distance={12} />
     </>
   )
 }
 
-// ─── Phase-aware camera ───────────────────────────────────────────
-function LoaderCamera({ phase, onFlyDone }) {
-  const { camera } = useThree()
-  const idling     = useRef(true)
-  const clock      = useRef(0)
+// ─── Single cinematic camera sequence ────────────────────────────────────
+//
+// 4-beat GSAP timeline — no idle phase, no hard transition, one take:
+//
+//  Beat 0  (start)  : Tight frontal close-up — text fills the frame
+//  Beat 1  (1.5 s)  : Dramatic pull-back + sweep left — full text reveal
+//  Beat 2  (1.3 s)  : Arc to front-right — appreciation / beauty shot
+//  Beat 3  (1.2 s)  : Lock straight onto the O letter — fly-in begins
+//  Beat 4  (0.9 s)  : ROCKET through the O — screen snaps to black
+//
+//  Total ≈ 4.9 s
+// ─────────────────────────────────────────────────────────────────────────
+function CinematicCamera({ phase, onFlyDone }) {
+  const { camera }   = useThree()
+  const onDoneRef    = useRef(onFlyDone)
+  const tlRef        = useRef(null)
 
+  // Keep callback ref fresh without restarting the effect
+  useEffect(() => { onDoneRef.current = onFlyDone }, [onFlyDone])
+
+  // Initialise camera proxy + Three camera to the opening position on mount
   useEffect(() => {
-    Object.assign(CAM, { x: 0, y: 0.8, z: 7, tx: 0, ty: 0.5, tz: 0, fov: 44 })
-    camera.fov = 44
+    Object.assign(CAM, { x: 0.5, y: 0.6, z: 4.2, tx: 0, ty: 0.7, tz: 0, fov: 62 })
+    camera.position.set(CAM.x, CAM.y, CAM.z)
+    camera.fov = CAM.fov
     camera.updateProjectionMatrix()
   }, []) // eslint-disable-line
 
+  // Fire the full cinematic sequence once the loading screen is gone
   useEffect(() => {
-    if (phase !== 'fly') return
-    idling.current = false
+    if (phase !== 'intro') return
 
-    // Snapshot camera into proxy
-    CAM.x = camera.position.x
-    CAM.y = camera.position.y
-    CAM.z = camera.position.z
-    CAM.tx = 0; CAM.ty = 0.5; CAM.tz = 0
-    CAM.fov = camera.fov
+    // Kill any stale timeline
+    tlRef.current?.kill()
 
-    const tl = gsap.timeline({ onComplete: onFlyDone })
-
-    // ── Wind-up → O entry — one continuous flowing path ──────────
-
-    // 1. Pull back — wide heroic reveal of the full text
-    tl.to(CAM, {
-      x: 0, y: 1.5, z: 11,
-      tx: 0, ty: 0.5, tz: 0,
-      fov: 58,
-      duration: 0.9,
-      ease: 'power2.out',
+    const tl = gsap.timeline({
+      defaults:   { ease: 'power2.inOut' },
+      onComplete: () => onDoneRef.current?.(),
     })
 
-    // 2. Arc right — dramatic orbit, camera swings to positive X
+    // ── Beat 1: Dramatic pull-back + sweep left ───────────────────────────
+    // Camera retreats and rises while swinging to the left — the chrome
+    // BRONCO text is revealed in full against the black void.
     tl.to(CAM, {
-      x: 2.8, y: 0.5, z: 9,
-      tx: 0, ty: 0.5, tz: 0,
-      fov: 52,
-      duration: 0.9,
-      ease: 'power1.inOut',
+      x: -3.8, y: 1.8, z: 9.5,
+      tx: 0.4,  ty: 0.6, tz: 0,
+      fov: 48,
+      duration: 1.5,
     })
 
-    // 3. Glide to O — one smooth sweep that ends already on the O axis.
-    //    Camera arrives at the O's X/Y with distance still ahead.
-    //    No separate "align" beat needed — it's already aimed.
+    // ── Beat 2: Arc to front-right — appreciation shot ───────────────────
+    // Camera swings across to the right side, slightly lower.
+    // The warm key light catches the chrome from this angle.
     tl.to(CAM, {
-      x: O_X, y: O_Y, z: 5.0,
+      x: 3.2, y: 0.8, z: 7.5,
+      tx: -0.2, ty: 0.65, tz: 0,
+      fov: 44,
+      duration: 1.3,
+    })
+
+    // ── Beat 3: Lock onto the O ───────────────────────────────────────────
+    // Camera glides smoothly to align dead-on with the O letter.
+    // FOV narrows — the letterform fills the lens like a tunnel.
+    tl.to(CAM, {
+      x: O_X, y: O_Y, z: 4.8,
       tx: O_X, ty: O_Y, tz: O_Z,
-      fov: 30,
-      duration: 1.4,
-      ease: 'power2.inOut',
+      fov: 26,
+      duration: 1.2,
     })
 
-    // 4. Rocket straight through — pure Z, zero lateral movement
+    // ── Beat 4: ROCKET through ────────────────────────────────────────────
+    // Pure-Z acceleration — FOV compresses to a pinhole.
+    // On completion, the loader fades out into the main site.
     tl.to(CAM, {
-      z: -8,
-      tz: -9,
-      fov: 10,
-      duration: 1.0,
+      z: -8, tz: -10,
+      fov: 9,
+      duration: 0.9,
       ease: 'power3.in',
     })
+
+    tlRef.current = tl
+    return () => tl.kill()
   }, [phase]) // eslint-disable-line
 
-  useFrame((_, delta) => {
-    if (idling.current) {
-      clock.current += delta
-      const T = clock.current
-
-      // Slow cinematic orbit — camera arcs around the text
-      // giving a sense of the text floating in space
-      const angle = T * 0.22
-      camera.position.x = Math.sin(angle) * 2.2
-      camera.position.y = 0.75 + Math.sin(T * 0.14) * 0.45
-      camera.position.z = 7.2 + Math.cos(angle * 0.6) * 1.2
-      camera.lookAt(0, 0.5, 0)
-      if (camera.fov !== 44) { camera.fov = 44; camera.updateProjectionMatrix() }
-      return
-    }
-
+  // Read proxy every frame → drive Three.js camera
+  useFrame(() => {
     camera.position.set(CAM.x, CAM.y, CAM.z)
     camera.lookAt(CAM.tx, CAM.ty, CAM.tz)
     if (Math.abs(camera.fov - CAM.fov) > 0.01) {
@@ -182,15 +172,15 @@ function LoaderCamera({ phase, onFlyDone }) {
   return null
 }
 
-// ─── Exported canvas ──────────────────────────────────────────────
+// ─── Exported canvas ──────────────────────────────────────────────────────
 export default function LoaderScene({ phase, onFlyDone }) {
   return (
     <Canvas
-      camera={{ position: [0, 0.8, 7], fov: 44, near: 0.01, far: 200 }}
+      camera={{ position: [0.5, 0.6, 4.2], fov: 62, near: 0.01, far: 200 }}
       gl={{
         antialias:           true,
         toneMapping:         THREE.ACESFilmicToneMapping,
-        toneMappingExposure: 1.0,
+        toneMappingExposure: 1.1,
         outputColorSpace:    THREE.SRGBColorSpace,
       }}
       shadows={{ type: THREE.PCFShadowMap }}
@@ -198,11 +188,10 @@ export default function LoaderScene({ phase, onFlyDone }) {
     >
       <LoaderLights />
       <Suspense fallback={null}>
-        {/* Studio environment for chrome reflections — essential for metallic material */}
         <Environment preset="studio" />
-        <BroncoText phase={phase} />
+        <BroncoText />
       </Suspense>
-      <LoaderCamera phase={phase} onFlyDone={onFlyDone} />
+      <CinematicCamera phase={phase} onFlyDone={onFlyDone} />
     </Canvas>
   )
 }

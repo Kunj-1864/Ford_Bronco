@@ -8,26 +8,24 @@ export default function Loader({ onComplete }) {
   const { progress, active } = useProgress()
   // 'loading' → pure HTML screen while models fetch
   // 'intro'   → BRONCO text orbiting; user sees the starting sequence
-  // 'fly'     → camera blasts through the O into the main site
   const [phase, setPhase] = useState('loading')
   const wrapRef           = useRef()
   const sceneWrapRef      = useRef()
   const triggered         = useRef(false)
 
-  // When all models are loaded, transition loading → intro → fly
+  // When all models are loaded, transition loading → intro
+  // The CinematicCamera timeline inside LoaderScene owns the full sequence
+  // and calls onFlyDone when it completes — no extra phase needed.
   useEffect(() => {
     if (!active && progress >= 100 && !triggered.current) {
       triggered.current = true
 
-      // Brief pause so the progress bar visually reaches 100
+      // Brief pause so the progress bar visually hits 100
       setTimeout(() => {
-        // Reveal the 3D scene while the loading screen fades out simultaneously
         setPhase('intro')
         if (sceneWrapRef.current) {
           gsap.to(sceneWrapRef.current, { opacity: 1, duration: 0.9, ease: 'power2.out' })
         }
-        // Let the user watch the BRONCO text orbit for ~2s, then fire the fly-through
-        setTimeout(() => setPhase('fly'), 2200)
       }, 450)
     }
   }, [active, progress])
