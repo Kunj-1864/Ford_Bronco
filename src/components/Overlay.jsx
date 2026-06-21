@@ -128,9 +128,9 @@ export default function Overlay({ scrollProgress }) {
 
       /* ── Beat 5: Headlight — wipe-in lines ── */
       {
-        applyVis(b5Line1.current, bv(sp, 0.57, 0.62, 0.73), { clipY: true })
-        applyVis(b5Line2.current, bv(sp, 0.59, 0.64, 0.73), { clipY: true })
-        applyVis(b5Line3.current, bv(sp, 0.61, 0.66, 0.73), { clipY: true })
+        applyVis(b5Line1.current, bv(sp, 0.57, 0.62, 0.76), { clipY: true })
+        applyVis(b5Line2.current, bv(sp, 0.59, 0.64, 0.76), { clipY: true })
+        applyVis(b5Line3.current, bv(sp, 0.61, 0.66, 0.76), { clipY: true })
       }
 
       /* ── Beat 6: 3/4 Reveal specs ── */
