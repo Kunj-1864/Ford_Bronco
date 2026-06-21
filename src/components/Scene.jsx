@@ -35,24 +35,6 @@ export default function Scene({ scrollProgress }) {
           <BroncoModel   scrollProgress={scrollProgress} />
           <ParticleField scrollProgress={scrollProgress} />
 
-          {/* Ground plane at y=0 — matching model bottom */}
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
-            <planeGeometry args={[80, 80]} />
-            <meshStandardMaterial
-              color="#050402"
-              metalness={0.6}
-              roughness={0.4}
-              transparent
-              opacity={0.8}
-            />
-          </mesh>
-
-          {/* Subtle ground fog disc */}
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-            <circleGeometry args={[6, 64]} />
-            <meshBasicMaterial color="#C8510A" transparent opacity={0.03} />
-          </mesh>
-
           <Environment preset="night" />
         </Suspense>
 
