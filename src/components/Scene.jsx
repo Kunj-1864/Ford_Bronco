@@ -22,7 +22,7 @@ export default function Scene({ scrollProgress }) {
           toneMappingExposure: 1.3,
           outputColorSpace: THREE.SRGBColorSpace,
         }}
-        shadows
+        shadows={{ type: THREE.PCFShadowMap }}
         dpr={[1, 1.5]}
         frameloop="always"
         style={{ background: 'transparent' }}

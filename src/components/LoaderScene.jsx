@@ -193,7 +193,7 @@ export default function LoaderScene({ phase, onFlyDone }) {
         toneMappingExposure: 1.0,
         outputColorSpace:    THREE.SRGBColorSpace,
       }}
-      shadows
+      shadows={{ type: THREE.PCFShadowMap }}
       style={{ position: 'absolute', inset: 0 }}
     >
       <LoaderLights />
