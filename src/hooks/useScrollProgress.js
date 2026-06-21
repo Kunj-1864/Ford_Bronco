@@ -16,6 +16,20 @@ export function useScrollProgress() {
       smoothTouch: false,
     })
 
+    // Tell ScrollTrigger to read scroll position from Lenis instead of
+    // the native DOM — this prevents scrub drift when the two disagree.
+    ScrollTrigger.scrollerProxy(document.documentElement, {
+      scrollTop(value) {
+        if (arguments.length) {
+          lenis.scrollTo(value, { immediate: true })
+        }
+        return lenis.scroll
+      },
+      getBoundingClientRect() {
+        return { top: 0, left: 0, width: window.innerWidth, height: window.innerHeight }
+      },
+    })
+
     // Lenis → ScrollTrigger bridge
     lenis.on('scroll', e => {
       progress.current = e.progress
@@ -27,7 +41,11 @@ export function useScrollProgress() {
     gsap.ticker.add(tick)
     gsap.ticker.lagSmoothing(0)
 
+    // Recompute all trigger positions against the Lenis-proxied scroller
+    ScrollTrigger.refresh()
+
     return () => {
+      ScrollTrigger.scrollerProxy(document.documentElement, null)
       gsap.ticker.remove(tick)
       lenis.destroy()
     }
