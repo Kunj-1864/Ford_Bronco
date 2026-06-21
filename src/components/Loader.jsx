@@ -1,32 +1,34 @@
 import { useEffect, useRef, useState } from 'react'
 import { useProgress } from '@react-three/drei'
 import gsap from 'gsap'
-import LoaderScene from './LoaderScene'
+import LoaderScene    from './LoaderScene'
+import LoadingScreen  from './LoadingScreen'
 
 export default function Loader({ onComplete }) {
   const { progress, active } = useProgress()
-  const [phase, setPhase]    = useState('loading')
-  const wrapRef              = useRef()
-  const hudRef               = useRef()
-  const barRef               = useRef()
-  const triggered            = useRef(false)
+  // 'loading' → pure HTML screen while models fetch
+  // 'intro'   → BRONCO text orbiting; user sees the starting sequence
+  // 'fly'     → camera blasts through the O into the main site
+  const [phase, setPhase] = useState('loading')
+  const wrapRef           = useRef()
+  const sceneWrapRef      = useRef()
+  const triggered         = useRef(false)
 
-  // Drive progress bar
-  useEffect(() => {
-    if (barRef.current) barRef.current.style.width = `${progress}%`
-  }, [progress])
-
-  // When fully loaded, kick off fly-through
+  // When all models are loaded, transition loading → intro → fly
   useEffect(() => {
     if (!active && progress >= 100 && !triggered.current) {
       triggered.current = true
+
+      // Brief pause so the progress bar visually reaches 100
       setTimeout(() => {
-        // Fade HUD out before blast
-        if (hudRef.current) {
-          gsap.to(hudRef.current, { opacity: 0, duration: 0.5, ease: 'power1.in' })
+        // Reveal the 3D scene while the loading screen fades out simultaneously
+        setPhase('intro')
+        if (sceneWrapRef.current) {
+          gsap.to(sceneWrapRef.current, { opacity: 1, duration: 0.9, ease: 'power2.out' })
         }
-        setPhase('fly')
-      }, 700)
+        // Let the user watch the BRONCO text orbit for ~2s, then fire the fly-through
+        setTimeout(() => setPhase('fly'), 2200)
+      }, 450)
     }
   }, [active, progress])
 
@@ -44,17 +46,18 @@ export default function Loader({ onComplete }) {
 
   return (
     <div className="loader-wrap" ref={wrapRef}>
-      {/* 3-D scene */}
-      <LoaderScene phase={phase} onFlyDone={handleFlyDone} />
 
-      {/* Progress HUD */}
-      <div className="loader-hud" ref={hudRef}>
-        <div className="loader-hud-eyebrow">FORD · 2021</div>
-        <div className="loader-hud-bar-wrap">
-          <div className="loader-hud-bar" ref={barRef} />
-        </div>
-        <div className="loader-hud-pct">{Math.round(progress)}%</div>
+      {/* ── 3D intro scene ───────────────────────────────────────────
+          Always mounted so useGLTF.preload is tracked by useProgress,
+          but invisible (opacity:0) until the intro phase begins.      */}
+      <div ref={sceneWrapRef} className="loader-scene-wrap">
+        <LoaderScene phase={phase} onFlyDone={handleFlyDone} />
       </div>
+
+      {/* ── HTML loading screen ──────────────────────────────────────
+          Overlays the hidden 3D scene until all models are ready.     */}
+      <LoadingScreen progress={progress} visible={phase === 'loading'} />
+
     </div>
   )
 }
